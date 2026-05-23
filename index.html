@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIGGOPOLY.IO - P2P</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+    <div id="top-progress"></div>
+    <div id="turn-vignette"></div>
+    <div id="your-turn-text" class="hidden">YOUR TURN</div>
+
+    <!-- LOBBY SCREEN -->
+    <div id="lobby" class="fade-in">
+        <h1 class="title">NIGGOPOLY<span class="neon-text">.IO</span></h1>
+        
+        <div id="reconnectArea" class="card hidden" style="margin-bottom: 20px; border-color: #10b981;">
+            <h3>Session Found</h3>
+            <p>You have an active game.</p>
+            <button id="reconnectBtn" class="btn-success">Reconnect to Game</button>
+            <button id="clearSessionBtn" class="btn-danger">Abandon Match</button>
+        </div>
+
+        <div class="lobby-cards" id="mainLobbyCards">
+            <div class="card setup-card">
+                <h3>Your Profile</h3>
+                <input type="text" id="playerNameInput" placeholder="Enter your name..." maxlength="12">
+                <div class="color-picker">
+                    <label>Pawn Color:</label>
+                    <input type="color" id="playerColorInput" value="#6366f1">
+                </div>
+                <div class="avatar-upload">
+                    <label>Or Upload Avatar (Optional):</label>
+                    <input type="file" id="playerAvatarInput" accept="image/png, image/jpeg">
+                </div>
+            </div>
+
+            <div class="card join-card">
+                <h3>Host or Join</h3>
+                <button id="hostBtn" class="btn-primary" disabled>Connecting...</button>
+                <div class="divider">OR</div>
+                <input type="text" id="joinIdInput" placeholder="Paste Room Code here...">
+                <button id="joinBtn" class="btn-primary" disabled>Connecting...</button>
+                <p id="joinStatus" class="status-text"></p>
+            </div>
+        </div>
+        
+        <div id="hostLobbyArea" class="card hidden" style="width: 100%; max-width: 400px; margin: 0 auto;">
+            <p class="room-code-label">Room Code (Click to Copy):</p>
+            <h2 id="hostIdDisplay" class="room-code">...</h2>
+            <div id="lobbyPlayers" class="lobby-players-list"></div>
+            <button id="readyBtn" class="btn-success">Ready Up</button>
+            <p id="startWarning" class="status-text"></p>
+        </div>
+    </div>
+
+    <!-- FULL SCREEN PAUSE OVERLAY -->
+    <div id="pause-overlay" class="hidden">
+        <div class="spinner"></div>
+        <h2>GAME PAUSED</h2>
+        <p id="pause-text">Waiting for player to reconnect...</p>
+        <h1 id="pause-timer">60</h1>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game" class="hidden fade-in">
+        <div id="left-panel" class="panel">
+            <h3>Players</h3>
+            <div id="players-list"></div>
+            <button id="openTradeBtn" class="btn-action" style="margin-top:10px;">🤝 Propose Trade</button>
+            <div class="vacation-pool">Vacation Pool: $<span id="vacationPoolDisplay">0</span></div>
+        </div>
+        
+        <div id="center-panel">
+            <div id="toast-container"></div>
+            <div id="board">
+                <div id="center-actions">
+                    <h2 id="turn-indicator">Waiting...</h2>
+                    <div id="dice-display">🎲</div>
+                    <div class="action-buttons">
+                        <button id="rollBtn" class="btn-action" disabled>Roll (1-12)</button>
+                        <div class="buy-skip-container">
+                            <button id="buyBtn" class="btn-success" disabled>Buy</button>
+                            <button id="skipBtn" class="btn-danger" disabled>Skip</button>
+                        </div>
+                        <button id="endTurnBtn" class="btn-action" disabled>End Turn</button>
+                        <button id="bankruptBtn" class="btn-danger" style="display:none;">Declare Bankruptcy</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="right-panel" class="panel">
+            <h3>Game Log</h3>
+            <div id="log"></div>
+            <div class="chat-container">
+                <div id="chat-messages"></div>
+                <input type="text" id="chatInput" placeholder="Type a message..." maxlength="50">
+            </div>
+        </div>
+    </div>
+
+    <!-- TILE INFO POPUP (Tooltip) -->
+    <div id="tile-tooltip" class="hidden">
+        <div id="tt-header">Tile Name</div>
+        <div id="tt-body"></div>
+        <div id="tt-actions" class="hidden">
+            <button id="tt-buildBtn" class="btn-success btn-sm">Build House</button>
+            <button id="tt-sellHouseBtn" class="btn-danger btn-sm">Sell House</button>
+            <button id="tt-sellPropBtn" class="btn-action btn-sm">Sell Property</button>
+        </div>
+    </div>
+
+    <!-- MODALS OVERLAY -->
+    <div id="modal-overlay" class="hidden fade-in">
+        <div id="auction-modal" class="modal hidden">
+            <h2>🔨 Auction!</h2>
+            <p id="auction-item" style="font-weight:bold; font-size:1.2rem; margin-bottom:5px;">Property Name</p>
+            <p>Highest Bid: <span id="auction-bid" class="highlight">$0</span> by <span id="auction-bidder">None</span></p>
+            <p id="auction-turn" style="color: #6366f1; font-weight:bold; margin-top:10px;">Waiting for...</p>
+            <div class="modal-buttons" style="flex-direction:column;">
+                <div style="display:flex; gap:10px;">
+                    <input type="number" id="auctionBidInput" placeholder="Enter bid...">
+                    <button id="bidBtn" class="btn-success">Bid</button>
+                </div>
+                <button id="foldBtn" class="btn-danger">Fold / Drop Out</button>
+            </div>
+        </div>
+
+        <div id="jail-modal" class="modal hidden">
+            <h2>🚓 You are in Jail</h2>
+            <p>Cost to attempt escape: <strong>$10</strong></p>
+            <p style="font-size:0.8rem; color:#a9b1d6; margin-bottom:15px;">Must roll 10, 11, or 12 to leave.</p>
+            <div class="modal-buttons">
+                <button id="jailRollBtn" class="btn-action">Pay $10 & Roll</button>
+            </div>
+        </div>
+
+        <div id="trade-modal" class="modal hidden">
+            <h2>🤝 Trade Offer</h2>
+            <select id="trade-target"></select>
+            <div style="display:flex; gap:10px; margin: 10px 0;">
+                <div style="flex:1"><h4>You Offer:</h4><select id="offer-prop"><option value="-1">No Property</option></select><input type="number" id="offer-money" placeholder="$ Cash" min="0"></div>
+                <div style="flex:1"><h4>You Want:</h4><select id="request-prop"><option value="-1">No Property</option></select><input type="number" id="request-money" placeholder="$ Cash" min="0"></div>
+            </div>
+            <div class="modal-buttons">
+                <button id="sendTradeBtn" class="btn-success">Send Offer</button>
+                <button class="btn-danger close-modal">Cancel</button>
+            </div>
+        </div>
+
+        <div id="trade-received-modal" class="modal hidden">
+            <h2>Incoming Trade!</h2>
+            <p id="trade-details"></p>
+            <div class="modal-buttons">
+                <button id="acceptTradeBtn" class="btn-success">Accept</button>
+                <button id="rejectTradeBtn" class="btn-danger">Reject</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- END GAME STATS SCREEN -->
+    <div id="end-screen" class="hidden">
+        <h1 style="text-align:center; margin-bottom: 20px; font-size: 2.5rem;">MATCH FINISHED</h1>
+        <div class="end-grid">
+            <div class="end-left">
+                <div class="stat-card winner-card">
+                    <h3 style="color:#a9b1d6;">Winner</h3>
+                    <div id="end-winner" style="font-size: 1.5rem; font-weight: bold; color: #10b981; display:flex; align-items:center; gap:10px;"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row"><span>Duration</span><span id="stat-duration">00:00</span></div>
+                    <div class="stat-row"><span>Turns Taken</span><span id="stat-turns">0</span></div>
+                    <div class="stat-row"><span>Doubles Rolled</span><span id="stat-doubles">0</span></div>
+                    <div class="stat-row"><span>Trades</span><span id="stat-trades">0</span></div>
+                    <div class="stat-row"><span>Chat Messages</span><span id="stat-chats">0</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row"><span>Most Visited Tile</span><span id="stat-visited">None</span></div>
+                    <div class="stat-row"><span>Most Times in Prison</span><span id="stat-prison">None (0)</span></div>
+                </div>
+                <button id="returnHomeBtn" class="btn-primary" style="margin-top:auto;">Return to Lobby</button>
+            </div>
+            <div class="end-right stat-card">
+                <h3 style="text-align:center; margin-bottom: 10px;">Net Worth Over Time</h3>
+                <canvas id="netWorthChart" width="500" height="350"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
