@@ -4,6 +4,58 @@ if (typeof Peer === 'undefined') {
     alert("CRITICAL ERROR: PeerJS Library did not load. Check your internet connection or adblocker.");
 }
 
+// --- SYNTHESIZER SOUND ENGINE (Web Audio API) ---
+const SFX = {
+    ctx: null,
+    init() { 
+        if(!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    },
+    playTone(freq, type, duration, vol=0.05, slideFreq=null) {
+        if(!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, this.ctx.currentTime + duration);
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    },
+    click() { this.playTone(600, 'sine', 0.1, 0.02); },
+    roll() { 
+        this.playTone(400, 'square', 0.1, 0.03, 800); 
+        setTimeout(()=>this.playTone(500, 'square', 0.1, 0.03, 900), 100); 
+    },
+    buy() { // Happy ascending arpeggio
+        this.playTone(400, 'sine', 0.1, 0.05);
+        setTimeout(()=>this.playTone(523.25, 'sine', 0.15, 0.05), 100);
+        setTimeout(()=>this.playTone(659.25, 'sine', 0.3, 0.05), 200);
+    },
+    earn() { this.playTone(800, 'sine', 0.3, 0.05, 1200); }, // Coin get
+    pay() { this.playTone(300, 'sawtooth', 0.4, 0.05, 150); }, // Sad trombone
+    jail() { // Heavy low alarm
+        this.playTone(200, 'square', 0.4, 0.05, 100);
+        setTimeout(()=>this.playTone(150, 'square', 0.4, 0.05, 50), 400);
+    },
+    turn() { this.playTone(880, 'sine', 0.5, 0.08); }, // Bell chime
+    chat() { this.playTone(700, 'sine', 0.1, 0.03, 800); }, // Soft pop
+    bankrupt() {
+        this.playTone(150, 'sawtooth', 0.5, 0.08, 50);
+        setTimeout(()=>this.playTone(100, 'sawtooth', 0.8, 0.08, 20), 500);
+    }
+};
+
+// Global Click Listener for UI Sounds
+document.addEventListener('click', (e) => {
+    SFX.init(); // Browser requires user gesture to unlock Audio
+    if(e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.classList.contains('tile')) {
+        SFX.click();
+    }
+});
+
 // --- PROGRESS BAR & VIGNETTE ---
 function setProgress(percent) {
     const p = document.getElementById('top-progress');
@@ -42,7 +94,6 @@ let pauseInterval = null;
 
 // --- INITIALIZATION ---
 function initApp() {
-    console.log("initApp() called. Checking for saved sessions...");
     setProgress(30);
     const saved = localStorage.getItem(SESSION_KEY);
     
@@ -50,7 +101,6 @@ function initApp() {
     const jb = document.getElementById('joinBtn');
 
     if (saved) {
-        console.log("Saved session found.");
         const session = JSON.parse(saved);
         document.getElementById('reconnectArea').classList.remove('hidden');
         document.getElementById('mainLobbyCards').classList.add('hidden');
@@ -68,19 +118,14 @@ function initApp() {
             window.location.reload();
         };
     } else { 
-        console.log("No saved session. Reaching out to public matchmaking server...");
-        
-        // Failsafe Timeout
         const timeout = setTimeout(() => {
             if (hb.disabled) {
-                console.warn("Server connection timed out after 8 seconds.");
                 hb.innerText = "Network Error (Refresh)";
                 jb.innerText = "Network Error (Refresh)";
             }
         }, 8000);
 
         initPeer(null, () => {
-            console.log("Peer network connected successfully! Unlocking UI.");
             clearTimeout(timeout);
             setProgress(100);
             hb.innerText = "Create Room"; hb.disabled = false;
@@ -90,12 +135,9 @@ function initApp() {
 }
 
 function initPeer(forceId, callback) {
-    console.log("Connecting to PeerJS Network...");
-    
     peer = forceId ? new Peer(forceId, { debug: 2 }) : new Peer({ debug: 2 });
     
     peer.on('open', assignedId => { 
-        console.log("Assigned ID:", assignedId);
         myId = assignedId; 
         if(callback) callback(); 
     });
@@ -103,7 +145,6 @@ function initPeer(forceId, callback) {
     peer.on('error', err => {
         console.error("PEERJS ERROR:", err);
         if (err.type === 'unavailable-id') {
-            console.log("ID taken, requesting a new random one...");
             peer = new Peer({ debug: 2 });
             peer.on('open', assignedId => { myId = assignedId; if(callback) callback(); });
         } else {
@@ -114,7 +155,6 @@ function initPeer(forceId, callback) {
     peer.on('connection', handleHostIncomingConnection);
 }
 
-// Add this right above // --- HOST LOGIC ---
 function saveSession(hostIdStr, isHosting) {
     localStorage.setItem(SESSION_KEY, JSON.stringify({ myId, hostId: hostIdStr, isHost: isHosting }));
 }
@@ -364,29 +404,54 @@ function handleAction(action, playerId) {
         }
     }
 
-    if (gameState.currentTurnPhase === 'jail_decision' && action.type === 'JAIL_ROLL') {
-        cp.money -= 10;
-        const roll = Math.floor(Math.random() * 12) + 1;
-        gameState.lastRoll = roll;
-        addLog(`${cp.name} paid $10 & rolled ${roll}.`);
-        if (roll >= 10) {
-            cp.inJail = false; addLog(`${cp.name} Escaped!`);
-            cp.position = (cp.position + roll) % 40; 
-            const tile = gameState.board[cp.position];
-            if (['property', 'airport', 'company'].includes(tile.type) && !tile.ownerId) {
-                gameState.currentTurnPhase = 'buy_decision';
-            } else {
-                if (tile.type === 'tax') { cp.money-=tile.amount; gameState.vacationPool+=tile.amount; }
-                else if (tile.ownerId && tile.ownerId !== cp.id) {
-                    const rent = calculateRent(tile, roll);
-                    cp.money -= rent; gameState.players.find(p=>p.id===tile.ownerId).money += rent;
-                    addLog(`${cp.name} paid $${rent} rent.`);
+    if (gameState.currentTurnPhase === 'jail_decision') {
+        if (action.type === 'JAIL_PAY') {
+            cp.money -= 50;
+            gameState.vacationPool += 50;
+            cp.inJail = false;
+            addLog(`${cp.name} paid $50 to escape.`);
+            gameState.currentTurnPhase = 'roll'; 
+        }
+        else if (action.type === 'JAIL_ROLL') {
+            cp.money -= 10;
+            gameState.vacationPool += 10;
+            const roll = Math.floor(Math.random() * 12) + 1;
+            gameState.lastRoll = roll;
+            if(Math.random() < 0.16) gameState.stats.doublesRolled++;
+            addLog(`${cp.name} paid $10 & rolled ${roll}.`);
+            
+            if (roll >= 10) {
+                cp.inJail = false; addLog(`${cp.name} Escaped!`);
+                cp.position = (cp.position + roll) % 40; 
+                
+                const tile = gameState.board[cp.position];
+                gameState.stats.propertyVisits[cp.position] = (gameState.stats.propertyVisits[cp.position] || 0) + 1;
+                addLog(`Landed on ${tile.name}.`);
+
+                if (cp.position === 20) {
+                    cp.money += gameState.vacationPool; addLog(`${cp.name} got $${gameState.vacationPool} Vacation!`);
+                    gameState.vacationPool = 0; gameState.currentTurnPhase = 'end';
                 }
+                else if (cp.position === 30) {
+                    cp.position = 10; cp.inJail = true;
+                    gameState.stats.prisonVisits[cp.id] = (gameState.stats.prisonVisits[cp.id] || 0) + 1;
+                    addLog(`${cp.name} sent back to JAIL!`); gameState.currentTurnPhase = 'end';
+                }
+                else if (tile.type === 'tax') { cp.money-=tile.amount; gameState.vacationPool+=tile.amount; addLog(`Paid $${tile.amount} tax.`); gameState.currentTurnPhase = 'end'; }
+                else if (['chance', 'chest'].includes(tile.type)) { drawCard(cp); gameState.currentTurnPhase = 'end'; }
+                else if (['property', 'airport', 'company'].includes(tile.type)) {
+                    if (!tile.ownerId) {
+                        gameState.currentTurnPhase = 'buy_decision';
+                    } else if (tile.ownerId !== cp.id) {
+                        const rent = calculateRent(tile, roll);
+                        cp.money -= rent; gameState.players.find(p=>p.id===tile.ownerId).money += rent;
+                        addLog(`${cp.name} paid $${rent} rent.`); gameState.currentTurnPhase = 'end';
+                    } else { gameState.currentTurnPhase = 'end'; }
+                } else { gameState.currentTurnPhase = 'end'; }
+            } else {
+                addLog(`${cp.name} failed to escape.`);
                 gameState.currentTurnPhase = 'end';
             }
-        } else {
-            addLog(`${cp.name} failed to escape.`);
-            gameState.currentTurnPhase = 'end';
         }
     }
 
@@ -475,7 +540,6 @@ function broadcastState() {
     renderGame();
 }
 
-let lastLogCount = 0;
 function addLog(msg) { gameState.logs.push(msg); if(gameState.logs.length > 30) gameState.logs.shift(); }
 
 function hasMonopoly(playerId, group) {
@@ -523,7 +587,7 @@ function generateBoard() {
         { name: "Treasure", type: "chest" }, // 2
         { name: "Englewood", group: "#8B4513", price: 60, hPrice: 50, rents: [4, 20, 60, 180, 320, 450] }, // 3
         { name: "Income Tax", type: "tax", amount: 200 }, // 4
-        { name: "North Airport", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 5
+        { name: "Israeli Intelligence Airfield", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 5
         { name: "Jackey's Dungeon", group: "#87CEEB", price: 100, hPrice: 50, rents: [6, 30, 90, 270, 400, 550] }, // 6
         { name: "Surprise", type: "chance" }, // 7
         { name: "Coray's Tank", group: "#87CEEB", price: 100, hPrice: 50, rents: [6, 30, 90, 270, 400, 550] }, // 8
@@ -533,7 +597,7 @@ function generateBoard() {
         { name: "Trap House Co.", type: "company", price: 150 }, // 12
         { name: "Fag United", group: "#FF69B4", price: 140, hPrice: 100, rents: [10, 50, 150, 450, 625, 750] }, // 13
         { name: "Never Online Kikeland", group: "#FF69B4", price: 160, hPrice: 100, rents: [12, 60, 180, 500, 700, 900] }, // 14
-        { name: "East Airport", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 15
+        { name: "Little Saint James Airstrip", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 15
         { name: "Tom Pearl's Bowl", group: "#FFA500", price: 180, hPrice: 100, rents: [14, 70, 200, 550, 750, 950] }, // 16
         { name: "Treasure", type: "chest" }, // 17
         { name: "Stewart Bowman's Shit Cocktail", group: "#FFA500", price: 180, hPrice: 100, rents: [14, 70, 200, 550, 750, 950] }, // 18
@@ -543,7 +607,7 @@ function generateBoard() {
         { name: "Surprise", type: "chance" }, // 22
         { name: "Gas Chamber", group: "#FF0000", price: 220, hPrice: 150, rents: [18, 90, 250, 700, 875, 1050] }, // 23
         { name: "Hitler's Bunker", group: "#FF0000", price: 240, hPrice: 150, rents: [20, 100, 300, 750, 925, 1100] }, // 24
-        { name: "South Airport", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 25
+        { name: "Al-Qaeda Airport", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 25
         { name: "Tightskin's Kike Concentration Camp", group: "#FFFF00", price: 260, hPrice: 150, rents: [22, 110, 330, 800, 975, 1150] }, // 26
         { name: "Furry Convention", group: "#FFFF00", price: 260, hPrice: 150, rents: [22, 110, 330, 800, 975, 1150] }, // 27
         { name: "Wock n Henny Co.", type: "company", price: 150 }, // 28
@@ -553,7 +617,7 @@ function generateBoard() {
         { name: "Shit Covered Indian Street Food", group: "#008000", price: 300, hPrice: 200, rents: [26, 130, 390, 900, 1100, 1275] }, // 32
         { name: "Treasure", type: "chest" }, // 33
         { name: "No Shower Land", group: "#008000", price: 320, hPrice: 200, rents: [28, 150, 450, 1000, 1200, 1400] }, // 34
-        { name: "West Airport", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 35
+        { name: "9/11 Landing Zone", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 35
         { name: "Surprise", type: "chance" }, // 36
         { name: "Western Wall (Kike Kiss Wall)", group: "#0000FF", price: 350, hPrice: 200, rents: [35, 175, 500, 1100, 1300, 1500] }, // 37
         { name: "Luxury Tax", type: "tax", amount: 100 }, // 38
@@ -571,6 +635,8 @@ document.getElementById('skipBtn').onclick = () => act('SKIP');
 document.getElementById('endTurnBtn').onclick = () => act('END_TURN');
 document.getElementById('foldBtn').onclick = () => act('FOLD');
 document.getElementById('bankruptBtn').onclick = () => act('BANKRUPT');
+
+document.getElementById('jailPayBtn').onclick = () => act('JAIL_PAY');
 document.getElementById('jailRollBtn').onclick = () => act('JAIL_ROLL');
 
 document.getElementById('bidBtn').onclick = () => {
@@ -584,7 +650,6 @@ document.getElementById('chatInput').addEventListener('keypress', function (e) {
     }
 });
 
-// Tooltip Management
 let selectedTile = null;
 document.getElementById('tt-buildBtn').onclick = () => { act('BUILD', {tileIndex: selectedTile}); document.getElementById('tile-tooltip').classList.add('hidden'); };
 document.getElementById('tt-sellHouseBtn').onclick = () => { act('SELL_HOUSE', {tileIndex: selectedTile}); document.getElementById('tile-tooltip').classList.add('hidden'); };
@@ -630,6 +695,10 @@ function showToast(msg) {
 }
 
 // --- RENDER ENGINE ---
+let lastLogCount = 0;
+let lastChatCount = 0;
+let lastTurnIndex = -1;
+
 function getGridPos(index) {
     if (index===0) return {c:1, r:1}; if (index>0 && index<10) return {c:index+1, r:1};
     if (index===10) return {c:11, r:1}; if (index>10 && index<20) return {c:11, r:index-9};
@@ -659,7 +728,26 @@ function renderGame() {
     document.getElementById('game').classList.remove('hidden');
     document.getElementById('vacationPoolDisplay').innerText = gameState.vacationPool;
 
-    if (gameState.logs.length > lastLogCount) { showToast(gameState.logs[gameState.logs.length - 1]); lastLogCount = gameState.logs.length; }
+    // --- SFX TRIGGERS VIA LOG PARSING ---
+    if (gameState.chat.length > lastChatCount) {
+        SFX.chat();
+        lastChatCount = gameState.chat.length;
+    }
+
+    if (gameState.logs.length > lastLogCount) {
+        const newLogs = gameState.logs.slice(lastLogCount);
+        newLogs.forEach(log => {
+            showToast(log);
+            const l = log.toLowerCase();
+            if(l.includes('rolled')) SFX.roll();
+            else if(l.includes('bought') || l.includes('won auction')) SFX.buy();
+            else if(l.includes('paid') || l.includes('tax') || l.includes('failed')) SFX.pay();
+            else if(l.includes('net:') || l.includes('escaped') || l.includes('got $') || l.includes('accepted')) SFX.earn();
+            else if(l.includes('jail!')) SFX.jail();
+            else if(l.includes('bankrupt')) SFX.bankrupt();
+        });
+        lastLogCount = gameState.logs.length;
+    }
 
     if (gameState.status === 'paused') {
         document.getElementById('pause-overlay').classList.remove('hidden');
@@ -686,14 +774,23 @@ function renderGame() {
     const isMyTurn = cp && cp.id === myId;
     
     const v = document.getElementById('turn-vignette');
-    if (isMyTurn && !cp.bankrupt) {
-        if(!v.classList.contains('active-turn-vignette')) { v.classList.add('active-turn-vignette'); triggerYourTurnAnim(); }
-    } else { v.classList.remove('active-turn-vignette'); }
+    
+    // Check if turn just started
+    if (gameState.turnIndex !== lastTurnIndex) {
+        lastTurnIndex = gameState.turnIndex;
+        if (isMyTurn && !cp.bankrupt) {
+            v.classList.add('active-turn-vignette'); 
+            triggerYourTurnAnim();
+            SFX.turn();
+        } else {
+            v.classList.remove('active-turn-vignette');
+        }
+    }
 
     document.getElementById('turn-indicator').innerHTML = `<span style="color:${cp.color}">${cp.name}'s Turn</span>`;
     document.getElementById('dice-display').innerText = gameState.lastRoll || "🎲";
     
-    document.getElementById('rollBtn').disabled = !(isMyTurn && gameState.currentTurnPhase === 'roll' && !cp.inJail);
+    document.getElementById('rollBtn').disabled = !(isMyTurn && gameState.currentTurnPhase === 'roll');
     const tile = gameState.board[cp.position];
     const canBuy = isMyTurn && gameState.currentTurnPhase === 'buy_decision';
     document.getElementById('buyBtn').disabled = !(canBuy && cp.money >= tile.price);
@@ -892,6 +989,5 @@ function renderEndScreen() {
 
 document.getElementById('returnHomeBtn').onclick = () => { localStorage.removeItem(SESSION_KEY); localStorage.removeItem(HOST_STATE_KEY); window.location.reload(); };
 
-// --- BOOT PROCESS ---
 console.log("Script mapped! Executing initApp()...");
 initApp();
