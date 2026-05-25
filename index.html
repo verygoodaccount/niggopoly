@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIGGOPOLY.IO - P2P</title>
+    <title>WEALTH.IO - P2P</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
@@ -14,7 +14,7 @@
 
     <!-- LOBBY SCREEN -->
     <div id="lobby" class="fade-in">
-        <h1 class="title">NIGGOPOLY<span class="neon-text">.IO</span></h1>
+        <h1 class="title">WEALTH<span class="neon-text">.IO</span></h1>
         
         <div id="reconnectArea" class="card hidden" style="margin-bottom: 20px; border-color: #10b981;">
             <h3>Session Found</h3>
@@ -129,12 +129,13 @@
             </div>
         </div>
 
+        <!-- NEW JAIL MODAL FIX -->
         <div id="jail-modal" class="modal hidden">
             <h2>🚓 You are in Jail</h2>
-            <p>Cost to attempt escape: <strong>$10</strong></p>
-            <p style="font-size:0.8rem; color:#a9b1d6; margin-bottom:15px;">Must roll 10, 11, or 12 to leave.</p>
-            <div class="modal-buttons">
-                <button id="jailRollBtn" class="btn-action">Pay $10 & Roll</button>
+            <p style="font-size:0.8rem; color:#a9b1d6; margin-bottom:15px;">Pay bail or attempt a 25% escape roll.</p>
+            <div class="modal-buttons" style="display:flex; justify-content:center; gap:10px;">
+                <button id="jailPayBtn" class="btn-success">Pay $50</button>
+                <button id="jailRollBtn" class="btn-action">Pay $10 & Roll (10+)</button>
             </div>
         </div>
 
