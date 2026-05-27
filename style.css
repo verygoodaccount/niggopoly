@@ -138,3 +138,31 @@ h3 { text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; color: #
 .spinner { width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.1); border-top-color: #f43f5e; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 #pause-timer { font-size: 4rem; color: #f43f5e; font-weight: 800; margin-top: 10px; }
+
+/* --- UI JUICE ANIMATIONS --- */
+.floating-text {
+    position: absolute;
+    font-weight: 800;
+    font-size: 1.4rem;
+    pointer-events: none;
+    z-index: 1000;
+    animation: floatUpFade 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.8);
+}
+
+@keyframes floatUpFade {
+    0% { transform: translateY(0) scale(0.5); opacity: 0; }
+    15% { transform: translateY(-15px) scale(1.2); opacity: 1; }
+    100% { transform: translateY(-60px) scale(1); opacity: 0; }
+}
+
+.dice-rolling {
+    animation: fastShake 0.1s infinite !important;
+    color: #10b981;
+}
+
+@keyframes fastShake {
+    0% { transform: translate(1px, 1px) rotate(0deg); }
+    50% { transform: translate(-2px, -2px) rotate(-5deg); }
+    100% { transform: translate(-1px, 2px) rotate(5deg); }
+}
