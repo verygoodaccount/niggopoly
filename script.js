@@ -4,72 +4,53 @@ if (typeof Peer === 'undefined') {
     alert("CRITICAL ERROR: PeerJS Library did not load. Check your internet connection or adblocker.");
 }
 
-// --- SYNTHESIZER SOUND ENGINE (Web Audio API) ---
+// --- SYNTHESIZER SOUND ENGINE ---
 const SFX = {
     ctx: null,
     init() { 
-        if(!this.ctx) {
-            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if(!this.ctx) { 
+            try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } 
+            catch(e) { console.warn("AudioContext not supported by browser."); }
         }
     },
     playTone(freq, type, duration, vol=0.05, slideFreq=null) {
         if(!this.ctx) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-        if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, this.ctx.currentTime + duration);
-        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-        osc.connect(gain); gain.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + duration);
+        try {
+            const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, this.ctx.currentTime + duration);
+            gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(); osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {}
     },
     click() { this.playTone(600, 'sine', 0.1, 0.02); },
-    roll() { 
-        this.playTone(400, 'square', 0.1, 0.03, 800); 
-        setTimeout(()=>this.playTone(500, 'square', 0.1, 0.03, 900), 100); 
-    },
-    buy() { // Happy ascending arpeggio
-        this.playTone(400, 'sine', 0.1, 0.05);
-        setTimeout(()=>this.playTone(523.25, 'sine', 0.15, 0.05), 100);
-        setTimeout(()=>this.playTone(659.25, 'sine', 0.3, 0.05), 200);
-    },
-    earn() { this.playTone(800, 'sine', 0.3, 0.05, 1200); }, // Coin get
-    pay() { this.playTone(300, 'sawtooth', 0.4, 0.05, 150); }, // Sad trombone
-    jail() { // Heavy low alarm
-        this.playTone(200, 'square', 0.4, 0.05, 100);
-        setTimeout(()=>this.playTone(150, 'square', 0.4, 0.05, 50), 400);
-    },
-    turn() { this.playTone(880, 'sine', 0.5, 0.08); }, // Bell chime
-    chat() { this.playTone(700, 'sine', 0.1, 0.03, 800); }, // Soft pop
-    bankrupt() {
-        this.playTone(150, 'sawtooth', 0.5, 0.08, 50);
-        setTimeout(()=>this.playTone(100, 'sawtooth', 0.8, 0.08, 20), 500);
-    }
+    roll() { this.playTone(400, 'square', 0.1, 0.03, 800); setTimeout(()=>this.playTone(500, 'square', 0.1, 0.03, 900), 100); },
+    buy() { this.playTone(400, 'sine', 0.1, 0.05); setTimeout(()=>this.playTone(523.25, 'sine', 0.15, 0.05), 100); setTimeout(()=>this.playTone(659.25, 'sine', 0.3, 0.05), 200); },
+    earn() { this.playTone(800, 'sine', 0.3, 0.05, 1200); }, 
+    pay() { this.playTone(300, 'sawtooth', 0.4, 0.05, 150); }, 
+    jail() { this.playTone(200, 'square', 0.4, 0.05, 100); setTimeout(()=>this.playTone(150, 'square', 0.4, 0.05, 50), 400); },
+    turn() { this.playTone(880, 'sine', 0.5, 0.08); }, 
+    chat() { this.playTone(700, 'sine', 0.1, 0.03, 800); }, 
+    bankrupt() { this.playTone(150, 'sawtooth', 0.5, 0.08, 50); setTimeout(()=>this.playTone(100, 'sawtooth', 0.8, 0.08, 20), 500); }
 };
 
-// Global Click Listener for UI Sounds
 document.addEventListener('click', (e) => {
-    SFX.init(); // Browser requires user gesture to unlock Audio
-    if(e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.classList.contains('tile')) {
-        SFX.click();
-    }
+    SFX.init(); 
+    if(e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.classList.contains('tile')) { SFX.click(); }
 });
 
 // --- PROGRESS BAR & VIGNETTE ---
 function setProgress(percent) {
     const p = document.getElementById('top-progress');
-    if(p) {
-        p.style.width = percent + '%'; p.style.opacity = '1';
-        if(percent >= 100) setTimeout(() => p.style.opacity = '0', 300);
-    }
+    if(p) { p.style.width = percent + '%'; p.style.opacity = '1'; if(percent >= 100) setTimeout(() => p.style.opacity = '0', 300); }
 }
 
 function triggerYourTurnAnim() {
     const txt = document.getElementById('your-turn-text');
     if(!txt) return;
-    txt.classList.remove('hidden');
-    txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = 'popFade 2s forwards';
+    txt.classList.remove('hidden'); txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = 'popFade 2s forwards';
 }
 
 let peer = null, isHost = false, myId = null;
@@ -96,7 +77,6 @@ let pauseInterval = null;
 function initApp() {
     setProgress(30);
     const saved = localStorage.getItem(SESSION_KEY);
-    
     const hb = document.getElementById('hostBtn');
     const jb = document.getElementById('joinBtn');
 
@@ -106,28 +86,19 @@ function initApp() {
         document.getElementById('mainLobbyCards').classList.add('hidden');
         
         document.getElementById('reconnectBtn').onclick = () => {
-            setProgress(60);
-            document.getElementById('reconnectBtn').innerText = "Connecting...";
-            document.getElementById('reconnectBtn').disabled = true;
-            initPeer(session.myId, () => {
-                if (session.isHost) resumeHostSession(session); else resumeClientSession(session);
-            });
+            setProgress(60); document.getElementById('reconnectBtn').innerText = "Connecting..."; document.getElementById('reconnectBtn').disabled = true;
+            initPeer(session.myId, () => { if (session.isHost) resumeHostSession(session); else resumeClientSession(session); });
         };
         document.getElementById('clearSessionBtn').onclick = () => {
-            localStorage.removeItem(SESSION_KEY); localStorage.removeItem(HOST_STATE_KEY);
-            window.location.reload();
+            localStorage.removeItem(SESSION_KEY); localStorage.removeItem(HOST_STATE_KEY); window.location.reload();
         };
     } else { 
         const timeout = setTimeout(() => {
-            if (hb.disabled) {
-                hb.innerText = "Network Error (Refresh)";
-                jb.innerText = "Network Error (Refresh)";
-            }
+            if (hb.disabled) { hb.innerText = "Network Error (Refresh)"; jb.innerText = "Network Error (Refresh)"; }
         }, 8000);
 
         initPeer(null, () => {
-            clearTimeout(timeout);
-            setProgress(100);
+            clearTimeout(timeout); setProgress(100);
             hb.innerText = "Create Room"; hb.disabled = false;
             jb.innerText = "Join Room"; jb.disabled = false;
         }); 
@@ -136,22 +107,13 @@ function initApp() {
 
 function initPeer(forceId, callback) {
     peer = forceId ? new Peer(forceId, { debug: 2 }) : new Peer({ debug: 2 });
-    
-    peer.on('open', assignedId => { 
-        myId = assignedId; 
-        if(callback) callback(); 
-    });
-    
+    peer.on('open', assignedId => { myId = assignedId; if(callback) callback(); });
     peer.on('error', err => {
-        console.error("PEERJS ERROR:", err);
         if (err.type === 'unavailable-id') {
             peer = new Peer({ debug: 2 });
             peer.on('open', assignedId => { myId = assignedId; if(callback) callback(); });
-        } else {
-            showToast("Network Error: Check console.");
-        }
+        } else { showToast("Network Error: Check console."); }
     });
-    
     peer.on('connection', handleHostIncomingConnection);
 }
 
@@ -169,8 +131,7 @@ document.getElementById('hostBtn').onclick = () => {
 };
 
 document.getElementById('hostIdDisplay').onclick = function() {
-    navigator.clipboard.writeText(this.innerText);
-    showToast("Room Code copied to clipboard!");
+    navigator.clipboard.writeText(this.innerText); showToast("Room Code copied to clipboard!");
 };
 
 function resumeHostSession(session) {
@@ -185,8 +146,7 @@ function handleHostIncomingConnection(conn) {
     conn.on('data', data => {
         if (data.type === 'JOIN') { clientConnections.push(conn); addPlayer(conn.peer, data.profile); }
         if (data.type === 'RECONNECT') {
-            clientConnections.push(conn);
-            const p = gameState.players.find(pl => pl.id === data.oldId);
+            clientConnections.push(conn); const p = gameState.players.find(pl => pl.id === data.oldId);
             if (p) {
                 p.disconnected = false;
                 if(gameState.status === 'paused' && gameState.pausedData.disconnectedId === data.oldId) {
@@ -211,9 +171,8 @@ function triggerDisconnectPause(playerId) {
     pauseInterval = setInterval(() => {
         gameState.pausedData.timeoutLeft--;
         if (gameState.pausedData.timeoutLeft <= 0) {
-            clearInterval(pauseInterval);
-            handleAction({type: 'BANKRUPT'}, p.id);
-            gameState.status = 'playing'; addLog(`${p.name} abandoned match.`); addToast(`${p.name} Abandoned.`);
+            clearInterval(pauseInterval); handleAction({type: 'BANKRUPT'}, p.id);
+            gameState.status = 'playing'; addLog(`${p.name} abandoned match.`); showToast(`${p.name} Abandoned.`);
             broadcastState();
         } else { broadcastState(); }
     }, 1000);
@@ -221,24 +180,19 @@ function triggerDisconnectPause(playerId) {
 
 // --- CLIENT LOGIC ---
 document.getElementById('joinBtn').onclick = () => {
-    setProgress(50);
-    const hostId = document.getElementById('joinIdInput').value;
-    hostConnection = peer.connect(hostId);
-    setupClientConnection(hostId, false);
+    setProgress(50); const hostId = document.getElementById('joinIdInput').value;
+    hostConnection = peer.connect(hostId); setupClientConnection(hostId, false);
 };
 
 function resumeClientSession(session) {
-    hostConnection = peer.connect(session.hostId);
-    setupClientConnection(session.hostId, true);
+    hostConnection = peer.connect(session.hostId); setupClientConnection(session.hostId, true);
 }
 
 function setupClientConnection(hostId, isReconnect) {
     hostConnection.on('open', () => {
-        setProgress(100);
-        document.getElementById('mainLobbyCards').classList.add('hidden');
+        setProgress(100); document.getElementById('mainLobbyCards').classList.add('hidden');
         document.getElementById('hostLobbyArea').classList.remove('hidden');
-        document.getElementById('hostIdDisplay').innerText = hostId;
-        saveSession(hostId, false);
+        document.getElementById('hostIdDisplay').innerText = hostId; saveSession(hostId, false);
         if (isReconnect) hostConnection.send({ type: 'RECONNECT', oldId: myId });
         else hostConnection.send({ type: 'JOIN', profile: getLocalProfile() });
     });
@@ -253,11 +207,9 @@ document.getElementById('playerAvatarInput').addEventListener('change', function
     reader.onload = event => {
         const img = new Image();
         img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const MAX = 64; let w = img.width, h = img.height;
+            const canvas = document.createElement('canvas'); const MAX = 64; let w = img.width, h = img.height;
             if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h);
             localData.avatar = canvas.toDataURL('image/jpeg', 0.6); 
         };
         img.src = event.target.result;
@@ -267,8 +219,7 @@ document.getElementById('playerAvatarInput').addEventListener('change', function
 
 function getLocalProfile() {
     localData.name = document.getElementById('playerNameInput').value || "Player";
-    localData.color = document.getElementById('playerColorInput').value;
-    return localData;
+    localData.color = document.getElementById('playerColorInput').value; return localData;
 }
 
 function addPlayer(id, profile) {
@@ -276,14 +227,13 @@ function addPlayer(id, profile) {
         id: id, name: profile.name, color: profile.color, avatar: profile.avatar,
         ready: false, money: 1500, position: 0, inJail: false, bankrupt: false, disconnected: false
     });
-    gameState.stats.netWorthHistory[id] = [{turn: 0, netWorth: 1500}];
-    broadcastState();
+    gameState.stats.netWorthHistory[id] = [{turn: 0, netWorth: 1500}]; broadcastState();
 }
 
-document.getElementById('readyBtn').onclick = () => {
-    act('READY');
-    document.getElementById('readyBtn').disabled = true;
-    document.getElementById('readyBtn').innerText = "Waiting...";
+document.getElementById('readyBtn').onclick = () => { 
+    act('READY'); 
+    document.getElementById('readyBtn').disabled = true; 
+    document.getElementById('readyBtn').innerText = "Waiting..."; 
 };
 
 // --- STAT TRACKING HELPERS ---
@@ -291,9 +241,7 @@ function recordNetWorth() {
     gameState.players.forEach(p => {
         if(p.bankrupt) return;
         let nw = p.money;
-        gameState.board.forEach(t => {
-            if(t.ownerId === p.id) nw += (t.price/2) + (t.houses * ((t.hPrice||0)/2));
-        });
+        gameState.board.forEach(t => { if(t.ownerId === p.id) nw += (t.price/2) + (t.houses * ((t.hPrice||0)/2)); });
         gameState.stats.netWorthHistory[p.id].push({turn: gameState.stats.totalTurns, netWorth: nw});
     });
 }
@@ -301,8 +249,7 @@ function recordNetWorth() {
 function checkEndGame() {
     const active = gameState.players.filter(p => !p.bankrupt);
     if(active.length <= 1 && gameState.status === 'playing') {
-        gameState.status = 'ended';
-        gameState.stats.endTime = Date.now();
+        gameState.status = 'ended'; gameState.stats.endTime = Date.now();
     }
 }
 
@@ -315,25 +262,37 @@ function handleAction(action, playerId) {
         const p = gameState.players.find(pl=>pl.id===playerId);
         gameState.chat.push({name: p.name, msg: action.msg});
         if(gameState.chat.length > 50) gameState.chat.shift();
-        gameState.stats.totalChats++;
-        broadcastState(); return;
+        gameState.stats.totalChats++; broadcastState(); return;
     }
 
+    // THE FIX: BULLETPROOF READY AND COUNTDOWN LOGIC
     if (action.type === 'READY') {
-        const p = gameState.players.find(pl=>pl.id===playerId); if(p) p.ready = true;
+        const p = gameState.players.find(pl=>pl.id===playerId); 
+        if(p) p.ready = true;
+        
         if (gameState.players.length >= 2 && gameState.players.every(pl => pl.ready) && gameState.status === 'lobby') {
-            gameState.status = 'countdown';
-            let count = 3; broadcastState();
+            gameState.status = 'countdown'; 
+            let count = 3; 
+            gameState.logs.push(`Starting in ${count}...`);
+            broadcastState(); // Broadcast the 3... immediately
+            
             const cd = setInterval(() => {
                 count--;
                 if(count <= 0) {
-                    clearInterval(cd); generateBoard(); gameState.status = 'playing';
-                    gameState.stats.startTime = Date.now(); addLog("Game Started!");
-                } else { gameState.logs.push(`Starting in ${count}...`); }
+                    clearInterval(cd); 
+                    try { generateBoard(); } catch(e) { console.error("Board Gen Error", e); }
+                    gameState.status = 'playing';
+                    gameState.stats.startTime = Date.now(); 
+                    addLog("Game Started!");
+                } else { 
+                    gameState.logs.push(`Starting in ${count}...`); 
+                }
                 broadcastState();
             }, 1000);
+        } else {
+            broadcastState(); 
         }
-        broadcastState(); return;
+        return;
     }
 
     if (gameState.status !== 'playing') return;
@@ -350,10 +309,8 @@ function handleAction(action, playerId) {
         cp.position = (cp.position + roll) % 40;
         
         if (cp.position < oldPos && cp.position !== 0) { 
-            let pVal = 0;
-            gameState.board.forEach(t=>{if(t.ownerId===cp.id) pVal+=(t.price+(t.houses*(t.hPrice||0)));});
-            const tax = Math.floor(pVal * 0.10);
-            cp.money += (200 - tax); addLog(`${cp.name} passed START. Net: $${200-tax}`);
+            cp.money += 200; 
+            addLog(`${cp.name} passed START. Collected $200.`);
         }
 
         const tile = gameState.board[cp.position];
@@ -394,80 +351,58 @@ function handleAction(action, playerId) {
         if (action.type === 'BID' && playerId === bidderId) {
             const amt = action.amount;
             if(amt > gameState.auction.highestBid && gameState.players.find(p=>p.id===playerId).money >= amt) {
-                gameState.auction.highestBid = amt; gameState.auction.highestBidderId = playerId;
-                nextAuctionTurn(false);
+                gameState.auction.highestBid = amt; gameState.auction.highestBidderId = playerId; nextAuctionTurn(false);
             }
         }
         if (action.type === 'FOLD' && playerId === bidderId) {
-            gameState.auction.activeBidders.splice(gameState.auction.turnIndex, 1);
-            nextAuctionTurn(true);
+            gameState.auction.activeBidders.splice(gameState.auction.turnIndex, 1); nextAuctionTurn(true);
         }
     }
 
     if (gameState.currentTurnPhase === 'jail_decision') {
         if (action.type === 'JAIL_PAY') {
-            cp.money -= 50;
-            gameState.vacationPool += 50;
-            cp.inJail = false;
-            addLog(`${cp.name} paid $50 to escape.`);
-            gameState.currentTurnPhase = 'roll'; 
+            cp.money -= 50; gameState.vacationPool += 50; cp.inJail = false;
+            addLog(`${cp.name} paid $50 to escape.`); gameState.currentTurnPhase = 'roll'; 
         }
         else if (action.type === 'JAIL_ROLL') {
-            cp.money -= 10;
-            gameState.vacationPool += 10;
+            cp.money -= 10; gameState.vacationPool += 10;
             const roll = Math.floor(Math.random() * 12) + 1;
             gameState.lastRoll = roll;
             if(Math.random() < 0.16) gameState.stats.doublesRolled++;
             addLog(`${cp.name} paid $10 & rolled ${roll}.`);
             
             if (roll >= 10) {
-                cp.inJail = false; addLog(`${cp.name} Escaped!`);
-                cp.position = (cp.position + roll) % 40; 
-                
+                cp.inJail = false; addLog(`${cp.name} Escaped!`); cp.position = (cp.position + roll) % 40; 
                 const tile = gameState.board[cp.position];
                 gameState.stats.propertyVisits[cp.position] = (gameState.stats.propertyVisits[cp.position] || 0) + 1;
                 addLog(`Landed on ${tile.name}.`);
 
-                if (cp.position === 20) {
-                    cp.money += gameState.vacationPool; addLog(`${cp.name} got $${gameState.vacationPool} Vacation!`);
-                    gameState.vacationPool = 0; gameState.currentTurnPhase = 'end';
-                }
-                else if (cp.position === 30) {
-                    cp.position = 10; cp.inJail = true;
-                    gameState.stats.prisonVisits[cp.id] = (gameState.stats.prisonVisits[cp.id] || 0) + 1;
-                    addLog(`${cp.name} sent back to JAIL!`); gameState.currentTurnPhase = 'end';
-                }
+                if (cp.position === 20) { cp.money += gameState.vacationPool; addLog(`${cp.name} got $${gameState.vacationPool} Vacation!`); gameState.vacationPool = 0; gameState.currentTurnPhase = 'end'; }
+                else if (cp.position === 30) { cp.position = 10; cp.inJail = true; gameState.stats.prisonVisits[cp.id] = (gameState.stats.prisonVisits[cp.id] || 0) + 1; addLog(`${cp.name} sent back to JAIL!`); gameState.currentTurnPhase = 'end'; }
                 else if (tile.type === 'tax') { cp.money-=tile.amount; gameState.vacationPool+=tile.amount; addLog(`Paid $${tile.amount} tax.`); gameState.currentTurnPhase = 'end'; }
                 else if (['chance', 'chest'].includes(tile.type)) { drawCard(cp); gameState.currentTurnPhase = 'end'; }
                 else if (['property', 'airport', 'company'].includes(tile.type)) {
-                    if (!tile.ownerId) {
-                        gameState.currentTurnPhase = 'buy_decision';
-                    } else if (tile.ownerId !== cp.id) {
-                        const rent = calculateRent(tile, roll);
-                        cp.money -= rent; gameState.players.find(p=>p.id===tile.ownerId).money += rent;
+                    if (!tile.ownerId) { gameState.currentTurnPhase = 'buy_decision'; } 
+                    else if (tile.ownerId !== cp.id) {
+                        const rent = calculateRent(tile, roll); cp.money -= rent; gameState.players.find(p=>p.id===tile.ownerId).money += rent;
                         addLog(`${cp.name} paid $${rent} rent.`); gameState.currentTurnPhase = 'end';
                     } else { gameState.currentTurnPhase = 'end'; }
                 } else { gameState.currentTurnPhase = 'end'; }
-            } else {
-                addLog(`${cp.name} failed to escape.`);
-                gameState.currentTurnPhase = 'end';
-            }
+            } else { addLog(`${cp.name} failed to escape.`); gameState.currentTurnPhase = 'end'; }
         }
     }
 
     if (action.type === 'SELL_PROP') {
         const t = gameState.board[action.tileIndex];
         if (t.ownerId === playerId && t.houses === 0) {
-            t.ownerId = null;
-            gameState.players.find(pl=>pl.id===playerId).money += Math.floor(t.price / 2);
+            t.ownerId = null; gameState.players.find(pl=>pl.id===playerId).money += Math.floor(t.price / 2);
             addLog(`Sold ${t.name} for $${Math.floor(t.price/2)}.`);
         }
     }
     if (action.type === 'SELL_HOUSE') {
         const t = gameState.board[action.tileIndex];
         if (t.ownerId === playerId && t.houses > 0) {
-            t.houses--;
-            gameState.players.find(pl=>pl.id===playerId).money += Math.floor(t.hPrice / 2);
+            t.houses--; gameState.players.find(pl=>pl.id===playerId).money += Math.floor(t.hPrice / 2);
         }
     }
     if (action.type === 'BUILD') {
@@ -498,8 +433,7 @@ function handleAction(action, playerId) {
     }
 
     if (action.type === 'END_TURN' && gameState.currentTurnPhase === 'end' && cp.money >= 0) {
-        gameState.stats.totalTurns++;
-        recordNetWorth();
+        gameState.stats.totalTurns++; recordNetWorth();
         do { gameState.turnIndex = (gameState.turnIndex + 1) % gameState.players.length; }
         while (gameState.players[gameState.turnIndex].bankrupt);
         gameState.currentTurnPhase = 'roll'; gameState.lastRoll = null;
@@ -508,8 +442,7 @@ function handleAction(action, playerId) {
     if (action.type === 'BANKRUPT') {
         const p = gameState.players.find(pl=>pl.id===playerId); p.bankrupt = true;
         gameState.board.forEach(t=>{if(t.ownerId===p.id){t.ownerId=null; t.houses=0;}});
-        addLog(`${p.name} went BANKRUPT!`);
-        checkEndGame();
+        addLog(`${p.name} went BANKRUPT!`); checkEndGame();
         if(cp.id === playerId && gameState.status === 'playing') handleAction({type: 'END_TURN'}, playerId);
     }
 
@@ -532,7 +465,7 @@ function nextAuctionTurn(folded = false) {
     else if(gameState.auction.turnIndex >= gameState.auction.activeBidders.length) gameState.auction.turnIndex = 0;
 }
 
-// --- DATA/HELPER FUNCTIONS ---
+// --- DATA/HELPERS ---
 function broadcastState() {
     if (!isHost) return;
     localStorage.setItem(HOST_STATE_KEY, JSON.stringify(gameState)); 
@@ -556,7 +489,7 @@ function calculateRent(tile, roll) {
     if (tile.type === 'airport') {
         const count = gameState.board.filter(t => t.type === 'airport' && t.ownerId === tile.ownerId).length;
         if(count===0) return 0;
-        return 25 * Math.pow(2, count - 1); // 25, 50, 100, 200
+        return 25 * Math.pow(2, count - 1); 
     }
     if (tile.type === 'company') {
         const count = gameState.board.filter(t => t.type === 'company' && t.ownerId === tile.ownerId).length;
@@ -583,45 +516,45 @@ function drawCard(player) {
 function generateBoard() {
     const b = [
         { name: "START", type: "corner" }, // 0
-        { name: "O Block ('The O') ", group: "#8B4513", price: 60, hPrice: 50, rents: [2, 10, 30, 90, 160, 250] }, // 1
+        { name: "Cancun", group: "#8B4513", price: 60, hPrice: 50, rents: [2, 10, 30, 90, 160, 250] }, // 1
         { name: "Treasure", type: "chest" }, // 2
-        { name: "Englewood", group: "#8B4513", price: 60, hPrice: 50, rents: [4, 20, 60, 180, 320, 450] }, // 3
+        { name: "Mexico City", group: "#8B4513", price: 60, hPrice: 50, rents: [4, 20, 60, 180, 320, 450] }, // 3
         { name: "Income Tax", type: "tax", amount: 200 }, // 4
-        { name: "Israeli Intelligence Airfield", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 5
-        { name: "Jackey's Dungeon", group: "#87CEEB", price: 100, hPrice: 50, rents: [6, 30, 90, 270, 400, 550] }, // 6
+        { name: "South Airport", type: "airport", price: 200 }, // 5
+        { name: "Montreal", group: "#87CEEB", price: 100, hPrice: 50, rents: [6, 30, 90, 270, 400, 550] }, // 6
         { name: "Surprise", type: "chance" }, // 7
-        { name: "Coray's Tank", group: "#87CEEB", price: 100, hPrice: 50, rents: [6, 30, 90, 270, 400, 550] }, // 8
-        { name: "6650 Fallon Ln", group: "#87CEEB", price: 120, hPrice: 50, rents: [8, 40, 100, 300, 450, 600] }, // 9
+        { name: "Toronto", group: "#87CEEB", price: 100, hPrice: 50, rents: [6, 30, 90, 270, 400, 550] }, // 8
+        { name: "Vancouver", group: "#87CEEB", price: 120, hPrice: 50, rents: [8, 40, 100, 300, 450, 600] }, // 9
         { name: "JAIL", type: "corner" }, // 10
-        { name: "Dommy's Prissy Palace", group: "#FF69B4", price: 140, hPrice: 100, rents: [10, 50, 150, 450, 625, 750] }, // 11
-        { name: "Trap House Co.", type: "company", price: 150 }, // 12
-        { name: "Fag United", group: "#FF69B4", price: 140, hPrice: 100, rents: [10, 50, 150, 450, 625, 750] }, // 13
-        { name: "Never Online Kikeland", group: "#FF69B4", price: 160, hPrice: 100, rents: [12, 60, 180, 500, 700, 900] }, // 14
-        { name: "Little Saint James Airstrip", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 15
-        { name: "Tom Pearl's Bowl", group: "#FFA500", price: 180, hPrice: 100, rents: [14, 70, 200, 550, 750, 950] }, // 16
+        { name: "Seville", group: "#FF69B4", price: 140, hPrice: 100, rents: [10, 50, 150, 450, 625, 750] }, // 11
+        { name: "Electric Co.", type: "company", price: 150 }, // 12
+        { name: "Barcelona", group: "#FF69B4", price: 140, hPrice: 100, rents: [10, 50, 150, 450, 625, 750] }, // 13
+        { name: "Madrid", group: "#FF69B4", price: 160, hPrice: 100, rents: [12, 60, 180, 500, 700, 900] }, // 14
+        { name: "West Airport", type: "airport", price: 200 }, // 15
+        { name: "Osaka", group: "#FFA500", price: 180, hPrice: 100, rents: [14, 70, 200, 550, 750, 950] }, // 16
         { name: "Treasure", type: "chest" }, // 17
-        { name: "Stewart Bowman's Shit Cocktail", group: "#FFA500", price: 180, hPrice: 100, rents: [14, 70, 200, 550, 750, 950] }, // 18
-        { name: "Pig Norman's Pigslop", group: "#FFA500", price: 200, hPrice: 100, rents: [16, 80, 220, 600, 800, 1000] }, // 19
-        { name: "MATERNITY LEAVE", type: "corner" }, // 20
-        { name: "Aushwitz", group: "#FF0000", price: 220, hPrice: 150, rents: [18, 90, 250, 700, 875, 1050] }, // 21
+        { name: "Kyoto", group: "#FFA500", price: 180, hPrice: 100, rents: [14, 70, 200, 550, 750, 950] }, // 18
+        { name: "Tokyo", group: "#FFA500", price: 200, hPrice: 100, rents: [16, 80, 220, 600, 800, 1000] }, // 19
+        { name: "VACATION", type: "corner" }, // 20
+        { name: "Perth", group: "#FF0000", price: 220, hPrice: 150, rents: [18, 90, 250, 700, 875, 1050] }, // 21
         { name: "Surprise", type: "chance" }, // 22
-        { name: "Gas Chamber", group: "#FF0000", price: 220, hPrice: 150, rents: [18, 90, 250, 700, 875, 1050] }, // 23
-        { name: "Hitler's Bunker", group: "#FF0000", price: 240, hPrice: 150, rents: [20, 100, 300, 750, 925, 1100] }, // 24
-        { name: "Al-Qaeda Airport", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 25
-        { name: "Tightskin's Kike Concentration Camp", group: "#FFFF00", price: 260, hPrice: 150, rents: [22, 110, 330, 800, 975, 1150] }, // 26
-        { name: "Furry Convention", group: "#FFFF00", price: 260, hPrice: 150, rents: [22, 110, 330, 800, 975, 1150] }, // 27
-        { name: "Wock n Henny Co.", type: "company", price: 150 }, // 28
-        { name: "Cotton Field", group: "#FFFF00", price: 280, hPrice: 150, rents: [24, 120, 360, 850, 1025, 1200] }, // 29
-        { name: "GO TO JAIL, NIGGER!", type: "corner" }, // 30
-        { name: "Indian Shit Festival", group: "#008000", price: 300, hPrice: 200, rents: [26, 130, 390, 900, 1100, 1275] }, // 31
-        { name: "Shit Covered Indian Street Food", group: "#008000", price: 300, hPrice: 200, rents: [26, 130, 390, 900, 1100, 1275] }, // 32
+        { name: "Melbourne", group: "#FF0000", price: 220, hPrice: 150, rents: [18, 90, 250, 700, 875, 1050] }, // 23
+        { name: "Sydney", group: "#FF0000", price: 240, hPrice: 150, rents: [20, 100, 300, 750, 925, 1100] }, // 24
+        { name: "North Airport", type: "airport", price: 200 }, // 25
+        { name: "Salvador", group: "#FFFF00", price: 260, hPrice: 150, rents: [22, 110, 330, 800, 975, 1150] }, // 26
+        { name: "Rio", group: "#FFFF00", price: 260, hPrice: 150, rents: [22, 110, 330, 800, 975, 1150] }, // 27
+        { name: "Water Co.", type: "company", price: 150 }, // 28
+        { name: "Sao Paulo", group: "#FFFF00", price: 280, hPrice: 150, rents: [24, 120, 360, 850, 1025, 1200] }, // 29
+        { name: "GO TO JAIL", type: "corner" }, // 30
+        { name: "Chennai", group: "#008000", price: 300, hPrice: 200, rents: [26, 130, 390, 900, 1100, 1275] }, // 31
+        { name: "Mumbai", group: "#008000", price: 300, hPrice: 200, rents: [26, 130, 390, 900, 1100, 1275] }, // 32
         { name: "Treasure", type: "chest" }, // 33
-        { name: "No Shower Land", group: "#008000", price: 320, hPrice: 200, rents: [28, 150, 450, 1000, 1200, 1400] }, // 34
-        { name: "9/11 Landing Zone", type: "airport", price: 200, rents: [25, 50, 100, 200] }, // 35
+        { name: "Delhi", group: "#008000", price: 320, hPrice: 200, rents: [28, 150, 450, 1000, 1200, 1400] }, // 34
+        { name: "East Airport", type: "airport", price: 200 }, // 35
         { name: "Surprise", type: "chance" }, // 36
-        { name: "Western Wall (Kike Kiss Wall)", group: "#0000FF", price: 350, hPrice: 200, rents: [35, 175, 500, 1100, 1300, 1500] }, // 37
+        { name: "Los Angeles", group: "#0000FF", price: 350, hPrice: 200, rents: [35, 175, 500, 1100, 1300, 1500] }, // 37
         { name: "Luxury Tax", type: "tax", amount: 100 }, // 38
-        { name: "Twin Towers", group: "#0000FF", price: 400, hPrice: 200, rents: [50, 200, 600, 1400, 1700, 2000] } // 39
+        { name: "New York", group: "#0000FF", price: 400, hPrice: 200, rents: [50, 200, 600, 1400, 1700, 2000] } // 39
     ];
     gameState.board = b.map(t => ({ ...t, ownerId: null, houses: 0, type: t.type || 'property' }));
 }
@@ -635,34 +568,23 @@ document.getElementById('skipBtn').onclick = () => act('SKIP');
 document.getElementById('endTurnBtn').onclick = () => act('END_TURN');
 document.getElementById('foldBtn').onclick = () => act('FOLD');
 document.getElementById('bankruptBtn').onclick = () => act('BANKRUPT');
-
 document.getElementById('jailPayBtn').onclick = () => act('JAIL_PAY');
 document.getElementById('jailRollBtn').onclick = () => act('JAIL_ROLL');
-
-document.getElementById('bidBtn').onclick = () => {
-    const val = parseInt(document.getElementById('auctionBidInput').value);
-    if(val > gameState.auction.highestBid) act('BID', {amount: val});
-};
-
-document.getElementById('chatInput').addEventListener('keypress', function (e) {
-    if (e.key === 'Enter' && this.value.trim() !== '') {
-        act('CHAT', { msg: this.value.trim() }); this.value = '';
-    }
-});
+document.getElementById('bidBtn').onclick = () => { const val = parseInt(document.getElementById('auctionBidInput').value); if(val > gameState.auction.highestBid) act('BID', {amount: val}); };
+document.getElementById('chatInput').addEventListener('keypress', function (e) { if (e.key === 'Enter' && this.value.trim() !== '') { act('CHAT', { msg: this.value.trim() }); this.value = ''; }});
 
 let selectedTile = null;
 document.getElementById('tt-buildBtn').onclick = () => { act('BUILD', {tileIndex: selectedTile}); document.getElementById('tile-tooltip').classList.add('hidden'); };
 document.getElementById('tt-sellHouseBtn').onclick = () => { act('SELL_HOUSE', {tileIndex: selectedTile}); document.getElementById('tile-tooltip').classList.add('hidden'); };
 document.getElementById('tt-sellPropBtn').onclick = () => { act('SELL_PROP', {tileIndex: selectedTile}); document.getElementById('tile-tooltip').classList.add('hidden'); };
 
-document.addEventListener('click', (e) => {
-    if(!e.target.closest('.tile') && !e.target.closest('#tile-tooltip')) {
-        document.getElementById('tile-tooltip').classList.add('hidden');
-    }
-});
+document.addEventListener('click', (e) => { if(!e.target.closest('.tile') && !e.target.closest('#tile-tooltip')) document.getElementById('tile-tooltip').classList.add('hidden'); });
+document.querySelectorAll('.close-modal').forEach(b => { b.onclick = () => { document.getElementById('modal-overlay').classList.add('hidden'); b.closest('.modal').classList.add('hidden'); }; });
 
-document.querySelectorAll('.close-modal').forEach(b => {
-    b.onclick = () => { document.getElementById('modal-overlay').classList.add('hidden'); b.closest('.modal').classList.add('hidden'); };
+document.getElementById('trade-target').addEventListener('change', function(e) {
+    const targetId = e.target.value;
+    const theirProps = gameState.board.map((t,i)=>({t,i})).filter(x=>x.t.ownerId===targetId && x.t.houses===0);
+    document.getElementById('request-prop').innerHTML = '<option value="-1">None</option>' + theirProps.map(x=>`<option value="${x.i}">${x.t.name}</option>`).join('');
 });
 
 document.getElementById('openTradeBtn').onclick = () => {
@@ -670,13 +592,11 @@ document.getElementById('openTradeBtn').onclick = () => {
     document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden'));
     document.getElementById('trade-modal').classList.remove('hidden');
     const targets = gameState.players.filter(p=>!p.bankrupt && p.id !== myId);
-    document.getElementById('trade-target').innerHTML = targets.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+    const targetSelect = document.getElementById('trade-target');
+    targetSelect.innerHTML = targets.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
     const myProps = gameState.board.map((t,i)=>({t,i})).filter(x=>x.t.ownerId===myId && x.t.houses===0);
     document.getElementById('offer-prop').innerHTML = '<option value="-1">None</option>' + myProps.map(x=>`<option value="${x.i}">${x.t.name}</option>`).join('');
-    if(targets.length > 0) {
-        const theirProps = gameState.board.map((t,i)=>({t,i})).filter(x=>x.t.ownerId===targets[0].id && x.t.houses===0);
-        document.getElementById('request-prop').innerHTML = '<option value="-1">None</option>' + theirProps.map(x=>`<option value="${x.i}">${x.t.name}</option>`).join('');
-    }
+    if(targets.length > 0) { targetSelect.value = targets[0].id; targetSelect.dispatchEvent(new Event('change')); }
 };
 document.getElementById('sendTradeBtn').onclick = () => {
     act('PROPOSE_TRADE', { trade: {
@@ -695,21 +615,27 @@ function showToast(msg) {
 }
 
 // --- RENDER ENGINE ---
-let lastLogCount = 0;
-let lastChatCount = 0;
-let lastTurnIndex = -1;
+let lastLogCount = 0; let lastChatCount = 0; let lastTurnIndex = -1; let lastRenderedRoll = null; let lastMoneyState = {}; let confettiFired = false;
 
 function getGridPos(index) {
     if (index===0) return {c:1, r:1}; if (index>0 && index<10) return {c:index+1, r:1};
     if (index===10) return {c:11, r:1}; if (index>10 && index<20) return {c:11, r:index-9};
     if (index===20) return {c:11, r:11}; if (index>20 && index<30) return {c:11-(index-20), r:11};
     if (index===30) return {c:1, r:11}; if (index>30 && index<40) return {c:1, r:11-(index-30)};
+    return {c:1, r:1};
 }
 
 function renderGame() {
     if (gameState.status === 'lobby' || gameState.status === 'countdown') {
         document.getElementById('mainLobbyCards').classList.add('hidden'); document.getElementById('hostLobbyArea').classList.remove('hidden');
-        document.getElementById('startWarning').innerText = gameState.players.length < 2 ? "Need at least 2 players to start." : "";
+        
+        // VISUAL COUNTDOWN FIX
+        if (gameState.status === 'countdown') {
+            document.getElementById('startWarning').innerHTML = `<strong style="color:#10b981; font-size:1.2rem;">${gameState.logs[gameState.logs.length-1]}</strong>`;
+        } else {
+            document.getElementById('startWarning').innerText = gameState.players.length < 2 ? "Need at least 2 players to start." : "";
+        }
+
         document.getElementById('lobbyPlayers').innerHTML = gameState.players.map(p => 
             `<div style="display:flex; align-items:center; gap:10px; margin-bottom:5px;">
                 <div style="width:20px; height:20px; border-radius:50%; background-color:${p.color}; ${p.avatar ? `background-image:url(${p.avatar}); background-size:cover;` : ''}"></div>
@@ -719,32 +645,22 @@ function renderGame() {
         return;
     }
 
-    if (gameState.status === 'ended') {
-        renderEndScreen();
-        return;
-    }
+    if (gameState.status === 'ended') { renderEndScreen(); return; }
 
     document.getElementById('lobby').style.display = 'none';
     document.getElementById('game').classList.remove('hidden');
     document.getElementById('vacationPoolDisplay').innerText = gameState.vacationPool;
 
-    // --- SFX TRIGGERS VIA LOG PARSING ---
-    if (gameState.chat.length > lastChatCount) {
-        SFX.chat();
-        lastChatCount = gameState.chat.length;
-    }
+    if (gameState.chat.length > lastChatCount) { SFX.chat(); lastChatCount = gameState.chat.length; }
 
     if (gameState.logs.length > lastLogCount) {
         const newLogs = gameState.logs.slice(lastLogCount);
         newLogs.forEach(log => {
-            showToast(log);
-            const l = log.toLowerCase();
-            if(l.includes('rolled')) SFX.roll();
-            else if(l.includes('bought') || l.includes('won auction')) SFX.buy();
+            showToast(log); const l = log.toLowerCase();
+            if(l.includes('rolled')) SFX.roll(); else if(l.includes('bought') || l.includes('won auction')) SFX.buy();
             else if(l.includes('paid') || l.includes('tax') || l.includes('failed')) SFX.pay();
-            else if(l.includes('net:') || l.includes('escaped') || l.includes('got $') || l.includes('accepted')) SFX.earn();
-            else if(l.includes('jail!')) SFX.jail();
-            else if(l.includes('bankrupt')) SFX.bankrupt();
+            else if(l.includes('net:') || l.includes('escaped') || l.includes('got $') || l.includes('collected $') || l.includes('accepted')) SFX.earn();
+            else if(l.includes('jail!')) SFX.jail(); else if(l.includes('bankrupt')) SFX.bankrupt();
         });
         lastLogCount = gameState.logs.length;
     }
@@ -753,20 +669,33 @@ function renderGame() {
         document.getElementById('pause-overlay').classList.remove('hidden');
         const p = gameState.players.find(pl => pl.id === gameState.pausedData.disconnectedId);
         document.getElementById('pause-text').innerText = `Waiting for ${p ? p.name : 'player'} to reconnect...`;
-        document.getElementById('pause-timer').innerText = gameState.pausedData.timeoutLeft;
-        return;
+        document.getElementById('pause-timer').innerText = gameState.pausedData.timeoutLeft; return;
     } else { document.getElementById('pause-overlay').classList.add('hidden'); }
 
     document.getElementById('players-list').innerHTML = gameState.players.map((p, i) => `
-        <div class="player-stat ${p.bankrupt ? 'bankrupt' : ''}" style="border-color: ${p.color}">
+        <div class="player-stat ${p.bankrupt ? 'bankrupt' : ''}" id="player-card-${p.id}" style="border-color: ${p.color}; position:relative;">
             ${p.avatar ? `<img src="${p.avatar}">` : `<div style="width:30px;height:30px;border-radius:50%;background:${p.color}"></div>`}
             <div><strong>${p.name} ${p.id===myId?'(You)':''}</strong> ${i === gameState.turnIndex && !p.bankrupt ? '★' : ''}<br>
             <span class="${p.money < 0 ? 'negative-money' : ''}" style="color:#10b981">$${p.money}</span></div>
         </div>`).join('');
+        
+    gameState.players.forEach(p => {
+        const playerCard = document.getElementById(`player-card-${p.id}`);
+        if(playerCard && lastMoneyState[p.id] !== undefined && lastMoneyState[p.id] !== p.money) {
+            const diff = p.money - lastMoneyState[p.id];
+            const ft = document.createElement('div');
+            ft.className = 'floating-text'; ft.style.color = diff > 0 ? '#10b981' : '#f43f5e';
+            ft.innerText = diff > 0 ? `+$${diff}` : `-$${Math.abs(diff)}`;
+            const rect = playerCard.getBoundingClientRect();
+            ft.style.left = (rect.left + 50) + 'px'; ft.style.top = (rect.top + 10) + 'px';
+            document.body.appendChild(ft);
+            setTimeout(() => ft.remove(), 1500);
+        }
+        lastMoneyState[p.id] = p.money;
+    });
     
     document.getElementById('log').innerHTML = gameState.logs.map(l => `<div>> ${l}</div>`).join('');
     document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
-
     document.getElementById('chat-messages').innerHTML = gameState.chat.map(c => `<div class="chat-msg"><strong>${c.name}:</strong> ${c.msg}</div>`).join('');
     document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
 
@@ -774,21 +703,23 @@ function renderGame() {
     const isMyTurn = cp && cp.id === myId;
     
     const v = document.getElementById('turn-vignette');
-    
-    // Check if turn just started
     if (gameState.turnIndex !== lastTurnIndex) {
         lastTurnIndex = gameState.turnIndex;
-        if (isMyTurn && !cp.bankrupt) {
-            v.classList.add('active-turn-vignette'); 
-            triggerYourTurnAnim();
-            SFX.turn();
-        } else {
-            v.classList.remove('active-turn-vignette');
-        }
+        if (isMyTurn && !cp.bankrupt) { v.classList.add('active-turn-vignette'); triggerYourTurnAnim(); SFX.turn(); } 
+        else { v.classList.remove('active-turn-vignette'); }
     }
 
     document.getElementById('turn-indicator').innerHTML = `<span style="color:${cp.color}">${cp.name}'s Turn</span>`;
-    document.getElementById('dice-display').innerText = gameState.lastRoll || "🎲";
+    
+    const diceEl = document.getElementById('dice-display');
+    if (gameState.lastRoll && gameState.lastRoll !== lastRenderedRoll) {
+        lastRenderedRoll = gameState.lastRoll;
+        diceEl.classList.add('dice-rolling'); let rCount = 0;
+        const rollInt = setInterval(() => {
+            diceEl.innerText = Math.floor(Math.random() * 12) + 1; rCount++;
+            if(rCount > 10) { clearInterval(rollInt); diceEl.classList.remove('dice-rolling'); diceEl.innerText = gameState.lastRoll; }
+        }, 30);
+    } else if (!gameState.lastRoll) { diceEl.innerText = "🎲"; lastRenderedRoll = null; }
     
     document.getElementById('rollBtn').disabled = !(isMyTurn && gameState.currentTurnPhase === 'roll');
     const tile = gameState.board[cp.position];
@@ -807,13 +738,10 @@ function renderGame() {
         const div = document.createElement('div');
         div.className = `tile ${t.type==='corner'?'corner':''}`;
         if(i === 10) div.classList.add('jail-tile');
-        const pos = getGridPos(i); div.style.gridColumn = pos.c; div.style.gridRow = pos.row || pos.r;
+        const pos = getGridPos(i); if(pos) { div.style.gridColumn = pos.c; div.style.gridRow = pos.row || pos.r; }
         
         if (i === 10) { 
-            div.innerHTML = `
-                <div class="jail-cell"><div class="jail-bars"></div><span>IN PRISON</span></div>
-                <div class="jail-walkway"><span class="jail-walkway-text">Passing by</span></div>
-            `;
+            div.innerHTML = `<div class="jail-cell"><div class="jail-bars"></div><span>IN PRISON</span></div><div class="jail-walkway"><span class="jail-walkway-text">Passing by</span></div>`;
         } else {
             if (t.group) div.innerHTML += `<div class="tile-color-bar" style="background-color: ${t.group}"></div>`;
             div.innerHTML += `<div class="tile-name">${t.name}</div>`;
@@ -839,11 +767,9 @@ function renderGame() {
                 
             if (i === 10) {
                 const inJail = playersOnTile.filter(p=>p.inJail); const outJail = playersOnTile.filter(p=>!p.inJail);
-                if(inJail.length) div.querySelector('.jail-cell').innerHTML += `<div class="tokens" style="position:static; transform:none;">${inJail.map(p=>`<div class="token" style="background-color:${p.color}; width:15px; height:15px;"></div>`).join('')}</div>`;
-                if(outJail.length) div.querySelector('.jail-walkway').innerHTML += `<div class="tokens" style="position:static; transform:none;">${outJail.map(p=>`<div class="token" style="background-color:${p.color}; width:15px; height:15px;"></div>`).join('')}</div>`;
-            } else {
-                div.innerHTML += `<div class="tokens">${tokensHtml}</div>`;
-            }
+                if(inJail.length) { const jc = div.querySelector('.jail-cell'); if(jc) jc.innerHTML += `<div class="tokens" style="position:static; transform:none;">${inJail.map(p=>`<div class="token" style="background-color:${p.color}; width:15px; height:15px;"></div>`).join('')}</div>`; }
+                if(outJail.length) { const jw = div.querySelector('.jail-walkway'); if(jw) jw.innerHTML += `<div class="tokens" style="position:static; transform:none;">${outJail.map(p=>`<div class="token" style="background-color:${p.color}; width:15px; height:15px;"></div>`).join('')}</div>`; }
+            } else { div.innerHTML += `<div class="tokens">${tokensHtml}</div>`; }
         }
         
         div.onclick = (e) => {
@@ -853,8 +779,7 @@ function renderGame() {
                 tt.classList.remove('hidden');
                 
                 const rect = div.getBoundingClientRect();
-                tt.style.left = (rect.right + 10) + 'px';
-                tt.style.top = rect.top + 'px';
+                tt.style.left = (rect.right + 10) + 'px'; tt.style.top = rect.top + 'px';
                 if(rect.right + 220 > window.innerWidth) tt.style.left = (rect.left - 210) + 'px'; 
                 
                 document.getElementById('tt-header').innerText = t.name;
@@ -862,28 +787,11 @@ function renderGame() {
                 
                 let bodyHtml = '';
                 if(t.type === 'property') {
-                    bodyHtml = `
-                        <div class="tt-row highlight"><span>Base Rent</span><span>$${t.rents[0]}</span></div>
-                        <div class="tt-row"><span>Full Set</span><span>$${t.rents[0]*2}</span></div>
-                        <div class="tt-row"><span>1 House</span><span>$${t.rents[1]}</span></div>
-                        <div class="tt-row"><span>2 Houses</span><span>$${t.rents[2]}</span></div>
-                        <div class="tt-row"><span>3 Houses</span><span>$${t.rents[3]}</span></div>
-                        <div class="tt-row"><span>4 Houses</span><span>$${t.rents[4]}</span></div>
-                        <div class="tt-row"><span>Hotel</span><span>$${t.rents[5]}</span></div>
-                        <div class="tt-row" style="margin-top:5px; border-top:1px solid #3b3f5c; padding-top:5px;"><span>House Cost</span><span>$${t.hPrice}</span></div>
-                    `;
+                    bodyHtml = `<div class="tt-row highlight"><span>Base Rent</span><span>$${t.rents[0]}</span></div><div class="tt-row"><span>Full Set</span><span>$${t.rents[0]*2}</span></div><div class="tt-row"><span>1 House</span><span>$${t.rents[1]}</span></div><div class="tt-row"><span>2 Houses</span><span>$${t.rents[2]}</span></div><div class="tt-row"><span>3 Houses</span><span>$${t.rents[3]}</span></div><div class="tt-row"><span>4 Houses</span><span>$${t.rents[4]}</span></div><div class="tt-row"><span>Hotel</span><span>$${t.rents[5]}</span></div><div class="tt-row" style="margin-top:5px; border-top:1px solid #3b3f5c; padding-top:5px;"><span>House Cost</span><span>$${t.hPrice}</span></div>`;
                 } else if(t.type === 'airport') {
-                    bodyHtml = `
-                        <div class="tt-row"><span>1 Airport</span><span>$25</span></div>
-                        <div class="tt-row"><span>2 Airports</span><span>$50</span></div>
-                        <div class="tt-row"><span>3 Airports</span><span>$100</span></div>
-                        <div class="tt-row"><span>4 Airports</span><span>$200</span></div>
-                    `;
+                    bodyHtml = `<div class="tt-row"><span>1 Airport</span><span>$25</span></div><div class="tt-row"><span>2 Airports</span><span>$50</span></div><div class="tt-row"><span>3 Airports</span><span>$100</span></div><div class="tt-row"><span>4 Airports</span><span>$200</span></div>`;
                 } else if(t.type === 'company') {
-                    bodyHtml = `
-                        <div class="tt-row"><span>1 Company</span><span>$4 flat</span></div>
-                        <div class="tt-row"><span>2 Companies</span><span>$10 flat</span></div>
-                    `;
+                    bodyHtml = `<div class="tt-row"><span>1 Company</span><span>$4 flat</span></div><div class="tt-row"><span>2 Companies</span><span>$10 flat</span></div>`;
                 }
                 document.getElementById('tt-body').innerHTML = bodyHtml;
                 
@@ -910,17 +818,13 @@ function renderGame() {
         const currentBidderId = gameState.auction.activeBidders[gameState.auction.turnIndex];
         const pName = gameState.players.find(p=>p.id===currentBidderId)?.name || '';
         document.getElementById('auction-turn').innerText = pName + "'s turn to bid";
-        
         document.getElementById('auctionBidInput').min = gameState.auction.highestBid + 10;
         document.getElementById('auctionBidInput').value = gameState.auction.highestBid + 10;
-        
         document.getElementById('bidBtn').disabled = (currentBidderId !== myId) || (me.money < gameState.auction.highestBid + 1);
         document.getElementById('foldBtn').disabled = (currentBidderId !== myId);
     }
     
-    if (gameState.currentTurnPhase === 'jail_decision' && isMyTurn) {
-        needOverlay = true; document.getElementById('jail-modal').classList.remove('hidden');
-    }
+    if (gameState.currentTurnPhase === 'jail_decision' && isMyTurn) { needOverlay = true; document.getElementById('jail-modal').classList.remove('hidden'); }
 
     if (gameState.currentTurnPhase === 'trade_review' && gameState.activeTrade && gameState.activeTrade.to === myId) {
         needOverlay = true; document.getElementById('trade-received-modal').classList.remove('hidden');
@@ -931,10 +835,37 @@ function renderGame() {
     if (needOverlay) overlay.classList.remove('hidden'); else overlay.classList.add('hidden');
 }
 
-// --- END SCREEN GRAPHICS ---
+function shootConfetti() {
+    if (confettiFired) return;
+    confettiFired = true;
+    const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#8a2be2'];
+    for(let i=0; i<150; i++) {
+        const conf = document.createElement('div');
+        conf.style.position = 'fixed'; conf.style.width = '8px'; conf.style.height = '15px';
+        conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        conf.style.left = '50vw'; conf.style.top = '50vh'; conf.style.zIndex = '9999'; conf.style.pointerEvents = 'none';
+        
+        const angle = Math.random() * Math.PI * 2; const velocity = 5 + Math.random() * 20;
+        let vx = Math.cos(angle) * velocity; let vy = Math.sin(angle) * velocity;
+        let rot = Math.random() * 360; let rotSpeed = (Math.random() - 0.5) * 20;
+        document.body.appendChild(conf);
+
+        let frame = 0;
+        const anim = setInterval(() => {
+            frame++;
+            conf.style.left = parseFloat(conf.style.left) + vx + 'px'; conf.style.top = parseFloat(conf.style.top) + vy + 'px';
+            conf.style.transform = `rotate(${rot}deg)`;
+            vy += 0.5; rot += rotSpeed; 
+            if(frame > 120) { clearInterval(anim); conf.remove(); }
+        }, 20);
+    }
+}
+
 function renderEndScreen() {
     document.getElementById('game').classList.add('hidden');
     document.getElementById('end-screen').classList.remove('hidden');
+    
+    shootConfetti(); 
     
     const s = gameState.stats;
     const winner = gameState.players.find(p => !p.bankrupt) || gameState.players[0];
